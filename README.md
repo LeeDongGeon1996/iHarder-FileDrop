@@ -54,7 +54,7 @@ It is corrected version of iHarder/FileDrop.
  ```
 
 
-* Modified `public void drop( java.awt.dnd.DropTargetDropEvent evt )`
+* Modify `public void drop( java.awt.dnd.DropTargetDropEvent evt )`
 ```
 // Alert listener to drop.
 if (listener != null) 
@@ -80,6 +80,11 @@ if (listener != null)
 
 * Add `joinListenerThread()`
 ```
+/**
+     * Do not use this function on the main thread if there is UI task in the listenerThread.
+     * UI may be not rendered.
+     * @throws InterruptedException
+     */
     public void joinListenerThread() throws InterruptedException {
     	if(listenerThread != null) {
     		System.out.println("join");
