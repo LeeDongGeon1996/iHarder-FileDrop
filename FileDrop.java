@@ -7,6 +7,11 @@ import java.io.PrintStream;
 import java.io.Reader;
 
 /**
+ * This is the corrected version of FileDrop v1.1 by LeeDongGeon1996.
+ */
+
+ 
+/**
  * This class makes it easy to drag and drop files from the operating
  * system to a Java program. Any <tt>java.awt.Component</tt> can be
  * dropped onto, but only <tt>javax.swing.JComponent</tt>s will indicate
@@ -41,10 +46,12 @@ import java.io.Reader;
  * <p><em>Original author: Robert Harder, rharder@usa.net</em></p>
  * <p>2007-09-12 Nathan Blomquist -- Linux (KDE/Gnome) support added.</p>
  *
+ *  
  * @author  Robert Harder
  * @author  rharder@users.sf.net
  * @version 1.0.1
  */
+
 public class FileDrop
 {
     private transient javax.swing.border.Border normalBorder;
@@ -56,6 +63,10 @@ public class FileDrop
     
     // Default border color
     private static java.awt.Color defaultBorderColor = new java.awt.Color( 0f, 0f, 1f, 0.25f );
+    
+    // Thread for the listener processing asynchronously.
+    private Thread listenerThread  = null;
+
     
     /**
      * Constructs a {@link FileDrop} with a default light-blue border
@@ -74,6 +85,7 @@ public class FileDrop
               c,     // Drop target
               javax.swing.BorderFactory.createMatteBorder( 2, 2, 2, 2, defaultBorderColor ), // Drag border
               true, // Recursive
+              true,	//Synchronize
               listener );
     }   // end constructor
     
@@ -98,8 +110,36 @@ public class FileDrop
               c,     // Drop target
               javax.swing.BorderFactory.createMatteBorder( 2, 2, 2, 2, defaultBorderColor ), // Drag border
               recursive, // Recursive
+              true,	//Synchronize
               listener );
     }   // end constructor
+    
+    
+	/**
+	 * Constructor with a default border, synchronize flag and the option to
+	 * recursively set drop targets. 
+	 * If your synchronize flag is true, it will work as the same with the version 1.1.
+	 * It can cause some problem when your listener-work is UI task or time-consuming. 
+	 * Set synchronize flag as false.
+	 * When : 
+	 * * You don't want the window(OS directory) which has dropped files stopped. 
+	 * * FileDrop again inside listener function. (it means UI-task)
+	 *
+	 * @param c           Component on which files will be dropped.
+	 * @param recursive   Recursively set children as drop targets.
+	 * @param synchronize set whether it works synchronously or not.
+	 * @param listener    Listens for <tt>filesDropped</tt>.
+	 * @since 1.0
+	 */
+	public FileDrop(final java.awt.Component c, final boolean recursive, final boolean synchronize,
+			final Listener listener) {
+		this(null, // Logging stream
+				c, // Drop target
+				javax.swing.BorderFactory.createMatteBorder(2, 2, 2, 2, defaultBorderColor), // Drag border
+				recursive, // Recursive
+				synchronize, // Synchronize
+				listener);
+	} // end constructor
     
     
     /**
@@ -123,6 +163,7 @@ public class FileDrop
               c,    // Drop target
               javax.swing.BorderFactory.createMatteBorder( 2, 2, 2, 2, defaultBorderColor ), 
               false, // Recursive
+              true,	//Synchronize
               listener );
     }   // end constructor
     
@@ -154,6 +195,7 @@ public class FileDrop
               c,    // Drop target
               javax.swing.BorderFactory.createMatteBorder( 2, 2, 2, 2, defaultBorderColor ), // Drag border
               recursive, // Recursive
+              true,	//Synchronize
               listener );
     }   // end constructor
     
@@ -177,6 +219,7 @@ public class FileDrop
             c,      // Drop target
             dragBorder, // Drag border
             false,  // Recursive
+            true,	//Synchronize
             listener );
     }   // end constructor
     
@@ -204,6 +247,7 @@ public class FileDrop
             c,
             dragBorder,
             recursive,
+            true,	//Synchronize
             listener );
     }   // end constructor
     
@@ -232,6 +276,7 @@ public class FileDrop
             c,      // Drop target
             dragBorder, // Drag border
             false,  // Recursive
+            true,	//Synchronize
             listener );
     }   // end constructor
     
@@ -258,12 +303,14 @@ public class FileDrop
     final java.awt.Component c,
     final javax.swing.border.Border dragBorder,
     final boolean recursive,
+    final boolean synchronize,
     final Listener listener) 
     {   
         
         if( supportsDnD() )
-        {   // Make a drop listener
-            dropListener = new java.awt.dnd.DropTargetListener()
+        {   
+        	// Make a drop listener
+        	dropListener = new java.awt.dnd.DropTargetListener()
             {   public void dragEnter( java.awt.dnd.DropTargetDragEvent evt )
                 {       log( out, "FileDrop: dragEnter event." );
 
@@ -321,8 +368,24 @@ public class FileDrop
                             final java.io.File[] files = filesTemp;
 
                             // Alert listener to drop.
-                            if( listener != null )
-                                listener.filesDropped( files );
+							if (listener != null) 
+							{
+								if(synchronize)
+								{
+									listener.filesDropped(files);
+								}
+								else 
+								{
+									listenerThread = new Thread() 
+									{
+										public void run() 
+										{
+											listener.filesDropped(files);
+										}
+									};
+									listenerThread.start();
+								}
+							}
 
                             // Mark that drop is completed.
                             evt.getDropTargetContext().dropComplete(true);
@@ -434,6 +497,17 @@ public class FileDrop
         return supportsDnD.booleanValue();
     }   // end supportsDnD
     
+    /**
+     * Do not use this function on the main thread if there is UI task in the listenerThread.
+     * UI may be not rendered.
+     * @throws InterruptedException
+     */
+    public void joinListenerThread() throws InterruptedException {
+    	if(listenerThread != null) {
+    		listenerThread.join();
+    		listenerThread = null;
+    	}
+    }
     
      // BEGIN 2007-09-12 Nathan Blomquist -- Linux (KDE/Gnome) support added.
      private static String ZERO_CHAR_STRING = "" + (char)0;
